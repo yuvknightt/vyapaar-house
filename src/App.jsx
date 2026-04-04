@@ -3,6 +3,10 @@ import Navbar from './components/Navbar';
 import Home from './pages/Home';
 import Login from './pages/Login';
 import Cart from './pages/Cart';
+import Checkout from './pages/Checkout';
+import MyOrders from './pages/MyOrders';
+import ProductDetail from './pages/ProductDetail';
+import Admin from './pages/Admin';
 import Daftar from './pages/Daftar';
 import Hukumnama from './pages/Hukumnama';
 import Bhandar from './pages/Bhandar';
@@ -36,18 +40,19 @@ export default function App() {
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/login" element={<Login />} />
+            <Route path="/product/:id" element={<ProductDetail />} />
             <Route path="/cart" element={<ProtectedRoute><Cart /></ProtectedRoute>} />
-            <Route path="/my-orders" element={<ProtectedRoute><Hukumnama /></ProtectedRoute>} />
+            <Route path="/checkout" element={<ProtectedRoute><Checkout /></ProtectedRoute>} />
+            <Route path="/my-orders" element={<ProtectedRoute><MyOrders /></ProtectedRoute>} />
+            <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
             <Route path="/daftar" element={<AdminRoute><Daftar /></AdminRoute>} />
             <Route path="/inventory" element={<AdminRoute><Bhandar /></AdminRoute>} />
             <Route path="/dispatch" element={<AdminRoute><Aadesh /></AdminRoute>} />
           </Routes>
         </main>
         <footer style={{
-          textAlign: 'center',
-          padding: '20px',
-          borderTop: '1px solid var(--parchment-border)',
-          marginTop: '24px',
+          textAlign: 'center', padding: '20px',
+          borderTop: '1px solid var(--parchment-border)', marginTop: '24px',
         }}>
           <div className="ornament">❧ ✦ ❧</div>
           <div style={{ fontSize: '11px', color: 'var(--ink-muted)', letterSpacing: '3px', marginTop: '8px', fontStyle: 'italic' }}>

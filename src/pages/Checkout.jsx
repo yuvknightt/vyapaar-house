@@ -1,0 +1,176 @@
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useCart } from '../context/CartContext';
+import { useAuthContext } from '../context/AuthContext';
+import { api } from '../utils/api';
+import PageHeader from '../components/PageHeader';
+
+export default function Checkout() {
+  const { items, total, clearCart } = useCart();
+  const { user, profile } = useAuthContext();
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(false);
+  const [address, setAddress] = useState({
+    name: profile?.full_name || '',
+    phone: '',
+    street: '',
+    city: '',
+    state: '',
+    pincode: '',
+  });
+
+  const handleRazorpay = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+
+    const options = {
+      key: import.meta.env.VITE_RAZORPAY_KEY_ID,
+      amount: total * 100,
+      currency: 'INR',
+      name: 'Vyapaar House',
+      description: `Order for ${items.length} item(s)`,
+      prefill: {
+        name: address.name,
+        email: user.email,
+        contact: address.phone,
+      },
+      theme: { color: '#1a1a3e' },
+      handler: async (response) => {
+        try {
+          for (const item of items) {
+            await api.createOrder({
+              productId: item.id,
+              qty: item.qty,
+              customerEmail: user.email,
+            });
+          }
+          clearCart();
+          navigate('/my-orders', {
+            state: { success: true, paymentId: response.razorpay_payment_id }
+          });
+        } catch (err) {
+          alert('Payment done but order save failed. Contact support.');
+        }
+      },
+      modal: {
+        ondismiss: () => setLoading(false),
+      },
+    };
+
+    const rzp = new window.Razorpay(options);
+    rzp.open();
+    setLoading(false);
+  };
+
+  if (items.length === 0) {
+    navigate('/');
+    return null;
+  }
+
+  return (
+    <div style={{ maxWidth: '900px', margin: '0 auto', padding: '0 24px 48px' }}>
+      <PageHeader
+        title="Bhugtan"
+        hindi="भुगतान"
+        subtitle="complete your purchase · खरीदारी पूरी करें"
+      />
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.2fr) minmax(0,1fr)', gap: '24px' }}>
+        <div>
+          <div className="panel">
+            <div className="panel-head">
+              <span className="panel-title">Delivery Address · पता</span>
+            </div>
+            <div className="panel-body" style={{ padding: '20px' }}>
+              <form id="checkout-form" onSubmit={handleRazorpay}>
+                {[
+                  { key: 'name', label: 'Full Name · पूरा नाम', placeholder: 'Your full name' },
+                  { key: 'phone', label: 'Phone · फोन', placeholder: '10-digit mobile number' },
+                  { key: 'street', label: 'Street Address · गली', placeholder: 'House no, street, locality' },
+                  { key: 'city', label: 'City · शहर', placeholder: 'City' },
+                  { key: 'state', label: 'State · राज्य', placeholder: 'State' },
+                  { key: 'pincode', label: 'Pincode · पिन', placeholder: '6-digit pincode' },
+                ].map(field => (
+                  <div key={field.key} style={{ marginBottom: '14px' }}>
+                    <label className="vt-label">{field.label}</label>
+                    <input
+                      className="vt-input"
+                      placeholder={field.placeholder}
+                      value={address[field.key]}
+                      onChange={e => setAddress({ ...address, [field.key]: e.target.value })}
+                      required
+                    />
+                  </div>
+                ))}
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div className="panel">
+            <div className="panel-head">
+              <span className="panel-title">Order Summary</span>
+            </div>
+            <div className="panel-body">
+              {items.map((item, i) => (
+                <div key={item.id} style={{
+                  display: 'flex', gap: '12px', padding: '12px 16px',
+                  borderBottom: i < items.length - 1 ? '1px solid #e8dcc8' : 'none',
+                  alignItems: 'center',
+                }}>
+                  <img
+                    src={item.image}
+                    alt={item.name}
+                    style={{ width: '48px', height: '48px', objectFit: 'cover', border: '1px solid var(--parchment-border)' }}
+                    onError={e => { e.target.src = 'https://images.unsplash.com/photo-1610030469983-98e550d6193c?w=600&q=80'; }}
+                  />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: '13px', fontFamily: "'Yatra One', serif", color: 'var(--indigo)' }}>
+                      {item.name}
+                    </div>
+                    <div style={{ fontSize: '12px', color: 'var(--ink-muted)' }}>Qty: {item.qty}</div>
+                  </div>
+                  <div style={{ fontFamily: "'Yatra One', serif", fontSize: '14px' }}>
+                    ₹{(item.price * item.qty).toLocaleString('en-IN')}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="panel">
+            <div className="panel-body" style={{ padding: '16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px', color: 'var(--ink-muted)' }}>
+                <span>Subtotal</span>
+                <span>₹{total.toLocaleString('en-IN')}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px', fontSize: '13px', color: 'var(--ink-muted)' }}>
+                <span>Delivery</span>
+                <span style={{ color: 'var(--mehendi)' }}>Free</span>
+              </div>
+              <div style={{ height: '1px', background: 'var(--parchment-border)', marginBottom: '12px' }} />
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
+                <span style={{ fontFamily: "'Yatra One', serif", fontSize: '17px' }}>Total</span>
+                <span style={{ fontFamily: "'Yatra One', serif", fontSize: '22px', color: 'var(--indigo)' }}>
+                  ₹{total.toLocaleString('en-IN')}
+                </span>
+              </div>
+              <button
+                form="checkout-form"
+                type="submit"
+                className="vt-btn"
+                disabled={loading}
+              >
+                {loading ? 'Opening Payment...' : 'PAY WITH RAZORPAY · भुगतान करें'}
+              </button>
+              <div style={{ textAlign: 'center', marginTop: '10px', fontSize: '11px', color: 'var(--ink-muted)', fontStyle: 'italic' }}>
+                Secured by Razorpay · Test mode
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
