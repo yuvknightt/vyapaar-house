@@ -1,9 +1,31 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Navbar from './components/Navbar';
+import Home from './pages/Home';
+import Login from './pages/Login';
+import Cart from './pages/Cart';
 import Daftar from './pages/Daftar';
 import Hukumnama from './pages/Hukumnama';
 import Bhandar from './pages/Bhandar';
 import Aadesh from './pages/Aadesh';
+import { useAuthContext } from './context/AuthContext';
+
+function ProtectedRoute({ children }) {
+  const { user, loading } = useAuthContext();
+  if (loading) return (
+    <div style={{ textAlign: 'center', padding: '48px', fontStyle: 'italic', color: 'var(--ink-muted)' }}>
+      Consulting the records...
+    </div>
+  );
+  if (!user) return <Navigate to="/login" />;
+  return children;
+}
+
+function AdminRoute({ children }) {
+  const { user, isAdmin, loading } = useAuthContext();
+  if (loading) return null;
+  if (!user || !isAdmin) return <Navigate to="/" />;
+  return children;
+}
 
 export default function App() {
   return (
@@ -12,10 +34,13 @@ export default function App() {
         <Navbar />
         <main style={{ paddingTop: '24px' }}>
           <Routes>
-            <Route path="/" element={<Daftar />} />
-            <Route path="/orders" element={<Hukumnama />} />
-            <Route path="/inventory" element={<Bhandar />} />
-            <Route path="/dispatch" element={<Aadesh />} />
+            <Route path="/" element={<Home />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/cart" element={<ProtectedRoute><Cart /></ProtectedRoute>} />
+            <Route path="/my-orders" element={<ProtectedRoute><Hukumnama /></ProtectedRoute>} />
+            <Route path="/daftar" element={<AdminRoute><Daftar /></AdminRoute>} />
+            <Route path="/inventory" element={<AdminRoute><Bhandar /></AdminRoute>} />
+            <Route path="/dispatch" element={<AdminRoute><Aadesh /></AdminRoute>} />
           </Routes>
         </main>
         <footer style={{
