@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { useAuthContext } from '../context/AuthContext';
-import { api } from '../utils/api';
+import { placeFullOrder } from '../utils/orderService';
 import PageHeader from '../components/PageHeader';
 
 export default function Checkout() {
@@ -28,7 +28,7 @@ export default function Checkout() {
       amount: total * 100,
       currency: 'INR',
       name: 'Vyapaar House',
-      description: `Order for ${items.length} item(s)`,
+      description: `${items.length} item(s) from the bazaar`,
       prefill: {
         name: address.name,
         email: user.email,
@@ -37,19 +37,20 @@ export default function Checkout() {
       theme: { color: '#1a1a3e' },
       handler: async (response) => {
         try {
-          for (const item of items) {
-            await api.createOrder({
-              productId: item.id,
-              qty: item.qty,
-              customerEmail: user.email,
-            });
-          }
+          const order = await placeFullOrder({
+            user,
+            items,
+            address,
+            paymentId: response.razorpay_payment_id,
+            total,
+          });
           clearCart();
           navigate('/my-orders', {
-            state: { success: true, paymentId: response.razorpay_payment_id }
+            state: { success: true, orderId: order.id, paymentId: response.razorpay_payment_id }
           });
         } catch (err) {
-          alert('Payment done but order save failed. Contact support.');
+          alert('Payment done but order save failed: ' + err.message);
+          setLoading(false);
         }
       },
       modal: {
@@ -76,41 +77,39 @@ export default function Checkout() {
       />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.2fr) minmax(0,1fr)', gap: '24px' }}>
-        <div>
-          <div className="panel">
-            <div className="panel-head">
-              <span className="panel-title">Delivery Address · पता</span>
-            </div>
-            <div className="panel-body" style={{ padding: '20px' }}>
-              <form id="checkout-form" onSubmit={handleRazorpay}>
-                {[
-                  { key: 'name', label: 'Full Name · पूरा नाम', placeholder: 'Your full name' },
-                  { key: 'phone', label: 'Phone · फोन', placeholder: '10-digit mobile number' },
-                  { key: 'street', label: 'Street Address · गली', placeholder: 'House no, street, locality' },
-                  { key: 'city', label: 'City · शहर', placeholder: 'City' },
-                  { key: 'state', label: 'State · राज्य', placeholder: 'State' },
-                  { key: 'pincode', label: 'Pincode · पिन', placeholder: '6-digit pincode' },
-                ].map(field => (
-                  <div key={field.key} style={{ marginBottom: '14px' }}>
-                    <label className="vt-label">{field.label}</label>
-                    <input
-                      className="vt-input"
-                      placeholder={field.placeholder}
-                      value={address[field.key]}
-                      onChange={e => setAddress({ ...address, [field.key]: e.target.value })}
-                      required
-                    />
-                  </div>
-                ))}
-              </form>
-            </div>
+        <div className="panel">
+          <div className="panel-head">
+            <span className="panel-title">Delivery Address · पता</span>
+          </div>
+          <div className="panel-body" style={{ padding: '20px' }}>
+            <form id="checkout-form" onSubmit={handleRazorpay}>
+              {[
+                { key: 'name', label: 'Full Name · पूरा नाम', placeholder: 'Your full name' },
+                { key: 'phone', label: 'Phone · फोन', placeholder: '10-digit mobile number' },
+                { key: 'street', label: 'Street Address · गली', placeholder: 'House no, street, locality' },
+                { key: 'city', label: 'City · शहर', placeholder: 'City' },
+                { key: 'state', label: 'State · राज्य', placeholder: 'State' },
+                { key: 'pincode', label: 'Pincode · पिन', placeholder: '6-digit pincode' },
+              ].map(field => (
+                <div key={field.key} style={{ marginBottom: '14px' }}>
+                  <label className="vt-label">{field.label}</label>
+                  <input
+                    className="vt-input"
+                    placeholder={field.placeholder}
+                    value={address[field.key]}
+                    onChange={e => setAddress({ ...address, [field.key]: e.target.value })}
+                    required
+                  />
+                </div>
+              ))}
+            </form>
           </div>
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div className="panel">
             <div className="panel-head">
-              <span className="panel-title">Order Summary</span>
+              <span className="panel-title">Order Summary · सारांश</span>
             </div>
             <div className="panel-body">
               {items.map((item, i) => (
@@ -119,19 +118,15 @@ export default function Checkout() {
                   borderBottom: i < items.length - 1 ? '1px solid #e8dcc8' : 'none',
                   alignItems: 'center',
                 }}>
-                  <img
-                    src={item.image}
-                    alt={item.name}
-                    style={{ width: '48px', height: '48px', objectFit: 'cover', border: '1px solid var(--parchment-border)' }}
+                  <img src={item.image} alt={item.name}
+                    style={{ width: '52px', height: '52px', objectFit: 'cover', border: '1px solid var(--parchment-border)' }}
                     onError={e => { e.target.src = 'https://images.unsplash.com/photo-1610030469983-98e550d6193c?w=600&q=80'; }}
                   />
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: '13px', fontFamily: "'Yatra One', serif", color: 'var(--indigo)' }}>
-                      {item.name}
-                    </div>
+                    <div style={{ fontSize: '13px', fontFamily: "'Yatra One', serif", color: 'var(--indigo)' }}>{item.name}</div>
                     <div style={{ fontSize: '12px', color: 'var(--ink-muted)' }}>Qty: {item.qty}</div>
                   </div>
-                  <div style={{ fontFamily: "'Yatra One', serif", fontSize: '14px' }}>
+                  <div style={{ fontFamily: "'Yatra One', serif", fontSize: '14px', color: 'var(--indigo)' }}>
                     ₹{(item.price * item.qty).toLocaleString('en-IN')}
                   </div>
                 </div>
@@ -142,30 +137,25 @@ export default function Checkout() {
           <div className="panel">
             <div className="panel-body" style={{ padding: '16px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px', color: 'var(--ink-muted)' }}>
-                <span>Subtotal</span>
+                <span>Subtotal ({items.reduce((s, i) => s + i.qty, 0)} items)</span>
                 <span>₹{total.toLocaleString('en-IN')}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px', fontSize: '13px', color: 'var(--ink-muted)' }}>
-                <span>Delivery</span>
-                <span style={{ color: 'var(--mehendi)' }}>Free</span>
+                <span>Delivery · डाक</span>
+                <span style={{ color: 'var(--mehendi)' }}>Free · मुफ्त</span>
               </div>
               <div style={{ height: '1px', background: 'var(--parchment-border)', marginBottom: '12px' }} />
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
-                <span style={{ fontFamily: "'Yatra One', serif", fontSize: '17px' }}>Total</span>
-                <span style={{ fontFamily: "'Yatra One', serif", fontSize: '22px', color: 'var(--indigo)' }}>
+                <span style={{ fontFamily: "'Yatra One', serif", fontSize: '18px' }}>Total · कुल</span>
+                <span style={{ fontFamily: "'Yatra One', serif", fontSize: '24px', color: 'var(--indigo)' }}>
                   ₹{total.toLocaleString('en-IN')}
                 </span>
               </div>
-              <button
-                form="checkout-form"
-                type="submit"
-                className="vt-btn"
-                disabled={loading}
-              >
+              <button form="checkout-form" type="submit" className="vt-btn" disabled={loading}>
                 {loading ? 'Opening Payment...' : 'PAY WITH RAZORPAY · भुगतान करें'}
               </button>
               <div style={{ textAlign: 'center', marginTop: '10px', fontSize: '11px', color: 'var(--ink-muted)', fontStyle: 'italic' }}>
-                Secured by Razorpay · Test mode
+                Secured by Razorpay · Test mode active
               </div>
             </div>
           </div>
