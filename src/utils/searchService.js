@@ -11,16 +11,20 @@ export async function searchProducts({ query = '', category = 'all', minPrice = 
     supabaseQuery = supabaseQuery.eq('category', category);
   }
 
-  if (query && query.trim().length > 0) {
-    supabaseQuery = supabaseQuery.textSearch('search_vector', query, {
-      type: 'websearch',
-      config: 'english',
-    });
+  if (query && query.trim().length >= 2) {
+    const q = query.trim();
+    supabaseQuery = supabaseQuery.or(
+      `name.ilike.%${q}%,hindi.ilike.%${q}%,category.ilike.%${q}%,description.ilike.%${q}%,badge.ilike.%${q}%`
+    );
   }
 
   const { data, error } = await supabaseQuery.order('price', { ascending: true });
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    console.error('Search error:', error);
+    return [];
+  }
+
   return data || [];
 }
 
