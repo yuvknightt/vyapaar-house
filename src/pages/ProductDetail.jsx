@@ -1,17 +1,31 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { PRODUCTS } from '../utils/products';
+import { getProductById } from '../utils/searchService';
 import { useCart } from '../context/CartContext';
 import { useAuthContext } from '../context/AuthContext';
 
 export default function ProductDetail() {
   const { id } = useParams();
-  const product = PRODUCTS.find(p => p.id === parseInt(id));
+  const [product, setProduct] = useState(null);
+  const [loading, setLoading] = useState(true);
   const { addItem } = useCart();
   const { user } = useAuthContext();
   const navigate = useNavigate();
   const [qty, setQty] = useState(1);
   const [added, setAdded] = useState(false);
+
+  useEffect(() => {
+    getProductById(parseInt(id))
+      .then(setProduct)
+      .catch(() => setProduct(null))
+      .finally(() => setLoading(false));
+  }, [id]);
+
+  if (loading) return (
+    <div style={{ textAlign: 'center', padding: '48px', color: 'var(--ink-muted)', fontStyle: 'italic' }}>
+      Loading product details...
+    </div>
+  );
 
   if (!product) return (
     <div style={{ textAlign: 'center', padding: '48px', color: 'var(--ink-muted)', fontStyle: 'italic' }}>
@@ -19,7 +33,7 @@ export default function ProductDetail() {
     </div>
   );
 
-  const discount = Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100);
+  const discount = Math.round(((product.original_price - product.price) / product.original_price) * 100);
 
   const handleAdd = () => {
     if (!user) { navigate('/login'); return; }
@@ -77,10 +91,10 @@ export default function ProductDetail() {
 
           <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px' }}>
             <span style={{ fontFamily: "'Yatra One', serif", fontSize: '32px', color: 'var(--indigo)' }}>
-              ₹{product.price.toLocaleString('en-IN')}
+              ₹{product.price?.toLocaleString('en-IN')}
             </span>
             <span style={{ fontSize: '16px', color: 'var(--ink-muted)', textDecoration: 'line-through' }}>
-              ₹{product.originalPrice.toLocaleString('en-IN')}
+              ₹{product.original_price?.toLocaleString('en-IN')}
             </span>
             <span style={{ fontSize: '13px', background: '#e8f0e8', color: 'var(--mehendi)', padding: '2px 8px', border: '1px solid var(--mehendi)' }}>
               {discount}% off
@@ -125,10 +139,8 @@ export default function ProductDetail() {
               color: added ? 'white' : 'var(--indigo)',
               border: '1px solid var(--parchment-border)',
               fontFamily: "'Yatra One', serif",
-              fontSize: '13px',
-              letterSpacing: '1px',
-              cursor: 'pointer',
-              transition: 'all 0.2s',
+              fontSize: '13px', letterSpacing: '1px',
+              cursor: 'pointer', transition: 'all 0.2s',
             }}>
               {added ? '✓ Added to Cart' : 'ADD TO CART · कार्ट में डालें'}
             </button>
