@@ -6,10 +6,9 @@ import { useState, useEffect } from 'react';
 export default function Navbar() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, profile, isAdmin, signOut } = useAuthContext();
+  const { user, profile, isAdmin, signOut, loading } = useAuthContext();
   const { count } = useCart();
   const [scrolled, setScrolled] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 40);
@@ -56,19 +55,17 @@ export default function Navbar() {
         {navLinks.map(link => {
           const active = location.pathname === link.to;
           return (
-            <Link key={link.to} to={link.to} style={{ textDecoration: 'none', textAlign: 'center', position: 'relative' }}>
+            <Link key={link.to} to={link.to} style={{ textDecoration: 'none', textAlign: 'center', position: 'relative', paddingBottom: '4px' }}>
               <div style={{
                 fontFamily: "'Cinzel',serif",
                 color: active ? 'var(--gold)' : 'var(--ink-muted)',
-                fontSize: '11px',
-                letterSpacing: '2px',
-                transition: 'color 0.3s',
+                fontSize: '11px', letterSpacing: '2px', transition: 'color 0.3s',
               }}>{link.label}</div>
               <div className="devanagari" style={{ fontSize: '10px', color: active ? 'var(--gold)' : 'var(--ink-dim)', marginTop: '1px' }}>
                 {link.hindi}
               </div>
               {active && (
-                <div style={{ position: 'absolute', bottom: '-20px', left: '50%', transform: 'translateX(-50%)', width: '4px', height: '4px', borderRadius: '50%', background: 'var(--gold)' }} />
+                <div style={{ position: 'absolute', bottom: '-16px', left: '50%', transform: 'translateX(-50%)', width: '4px', height: '4px', borderRadius: '50%', background: 'var(--gold)' }} />
               )}
             </Link>
           );
@@ -76,7 +73,7 @@ export default function Navbar() {
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-        {user && (
+        {!loading && user && (
           <Link to="/cart" style={{ textDecoration: 'none', position: 'relative' }}>
             <div style={{
               fontFamily: "'Cinzel',serif", color: 'var(--gold)', fontSize: '11px',
@@ -90,14 +87,16 @@ export default function Navbar() {
                   background: 'var(--crimson)', color: 'white',
                   borderRadius: '50%', width: '18px', height: '18px',
                   fontSize: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontFamily: 'sans-serif', fontStyle: 'normal',
+                  fontFamily: 'sans-serif',
                 }}>{count}</span>
               )}
             </div>
           </Link>
         )}
 
-        {user ? (
+        {loading ? (
+          <div style={{ width: '80px', height: '32px', background: 'var(--bg3)', border: '1px solid var(--border)', animation: 'pulse 1.5s ease-in-out infinite' }} />
+        ) : user ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <div style={{ textAlign: 'right' }}>
               <div style={{ fontSize: '11px', color: 'var(--gold)', fontFamily: "'Cinzel',serif", letterSpacing: '1px' }}>
@@ -125,6 +124,7 @@ export default function Navbar() {
           </Link>
         )}
       </div>
+      <style>{`@keyframes pulse{0%,100%{opacity:0.4}50%{opacity:0.8}}`}</style>
     </nav>
   );
 }
