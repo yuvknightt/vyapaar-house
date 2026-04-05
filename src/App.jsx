@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import ChatAgent from './components/ChatAgent';
 import Navbar from './components/Navbar';
 import Home from './pages/Home';
 import Login from './pages/Login';
@@ -62,6 +63,7 @@ export default function App() {
             व्यापार भवन · since MMXXVI
           </div>
         </footer>
+      <ChatAgent />
       </div>
     </BrowserRouter>
   );
