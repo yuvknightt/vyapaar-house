@@ -20,7 +20,14 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(order),
     });
-    if (!res.ok) throw new Error('Failed to create order');
+    if (!res.ok) {
+      let errMsg = `Order service error ${res.status}`;
+      try {
+        const errData = await res.json();
+        errMsg = errData.message || errData.error || errMsg;
+      } catch {}
+      throw new Error(errMsg);
+    }
     return res.json();
   },
 
