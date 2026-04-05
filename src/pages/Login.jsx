@@ -1,7 +1,6 @@
-import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuthContext } from '../context/AuthContext';
-import PageHeader from '../components/PageHeader';
 
 export default function Login() {
   const [mode, setMode] = useState('login');
@@ -9,23 +8,22 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+  const [visible, setVisible] = useState(false);
   const { signInWithEmail, signUpWithEmail, signInWithGoogle } = useAuthContext();
   const navigate = useNavigate();
 
+  useEffect(() => { setTimeout(() => setVisible(true), 100); }, []);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
-    setError(null);
-    setSuccess(null);
-
+    setLoading(true); setError(null); setSuccess(null);
     if (mode === 'login') {
       const { error } = await signInWithEmail(form.email, form.password);
-      if (error) setError(error.message);
-      else navigate('/');
+      if (error) setError(error.message); else navigate('/');
     } else {
       const { error } = await signUpWithEmail(form.email, form.password, form.fullName);
       if (error) setError(error.message);
-      else setSuccess('Account created! You can now sign in.');
+      else { setSuccess('Account created! You can now sign in.'); setMode('login'); }
     }
     setLoading(false);
   };
@@ -36,38 +34,49 @@ export default function Login() {
   };
 
   return (
-    <div style={{ maxWidth: '480px', margin: '0 auto', padding: '0 24px 48px' }}>
-      <PageHeader
-        title={mode === 'login' ? 'Pravesh' : 'Naya Khata'}
-        hindi={mode === 'login' ? 'प्रवेश' : 'नया खाता'}
-        subtitle={mode === 'login' ? 'welcome back to the house' : 'join the trading house'}
-      />
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', overflow: 'hidden', padding: '40px 24px' }}>
+      {[
+        { w:500, h:500, top:'-10%', left:'-10%', color:'rgba(212,160,23,0.06)' },
+        { w:300, h:400, bottom:'5%', right:'5%', color:'rgba(139,32,32,0.08)' },
+        { w:200, h:200, top:'50%', left:'60%', color:'rgba(45,106,79,0.08)' },
+      ].map((orb, i) => (
+        <div key={i} style={{
+          position:'absolute', width:orb.w, height:orb.h, borderRadius:'50%',
+          background:`radial-gradient(circle, ${orb.color} 0%, transparent 70%)`,
+          top:orb.top, left:orb.left, bottom:orb.bottom, right:orb.right,
+          animation:`orbFloat ${5+i}s ease-in-out infinite ${i*1.5}s`, pointerEvents:'none',
+        }} />
+      ))}
 
-      <div className="panel">
-        <div className="panel-head">
-          <span className="panel-title">{mode === 'login' ? 'Sign In' : 'Create Account'}</span>
-          <span className="panel-sub">{mode === 'login' ? 'साइन इन' : 'खाता बनाएं'}</span>
+      <div style={{
+        width: '100%', maxWidth: '440px', position: 'relative', zIndex: 2,
+        opacity: visible ? 1 : 0, transform: visible ? 'translateY(0)' : 'translateY(32px)',
+        transition: 'all 0.8s ease',
+      }}>
+        <div style={{ textAlign: 'center', marginBottom: '40px' }}>
+          <div className="ornament">❧ ✦ ❧</div>
+          <h1 style={{ fontSize: '36px', marginTop: '12px', color: 'var(--gold)' }}>
+            {mode === 'login' ? 'Pravesh' : 'Naya Khata'}
+          </h1>
+          <div className="devanagari" style={{ fontSize: '20px', color: 'var(--ink-muted)', marginTop: '6px' }}>
+            {mode === 'login' ? 'प्रवेश' : 'नया खाता'}
+          </div>
+          <div style={{ fontSize: '11px', color: 'var(--ink-dim)', letterSpacing: '3px', marginTop: '8px', fontStyle: 'italic' }}>
+            {mode === 'login' ? 'welcome back to the house' : 'join the trading house'}
+          </div>
+          <div className="ornament" style={{ marginTop: '12px' }}>— ✦ —</div>
         </div>
-        <div className="panel-body" style={{ padding: '24px' }}>
 
-          <button
-            onClick={handleGoogle}
-            style={{
-              width: '100%',
-              padding: '10px',
-              background: '#fffdf7',
-              border: '1px solid var(--parchment-border)',
-              cursor: 'pointer',
-              fontFamily: "'Crimson Text', serif",
-              fontSize: '14px',
-              color: 'var(--ink)',
-              marginBottom: '20px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '10px',
-              letterSpacing: '1px',
-            }}
+        <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', padding: '32px' }}>
+          <button onClick={handleGoogle} style={{
+            width: '100%', padding: '12px', background: 'var(--bg3)',
+            border: '1px solid var(--border)', cursor: 'pointer',
+            fontFamily: "'Crimson Text',serif", fontSize: '14px', color: 'var(--ink)',
+            marginBottom: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            gap: '10px', letterSpacing: '1px', transition: 'all 0.3s',
+          }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border-md)'; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; }}
           >
             <svg width="18" height="18" viewBox="0 0 24 24">
               <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -78,59 +87,38 @@ export default function Login() {
             Continue with Google
           </button>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
-            <div style={{ flex: 1, height: '1px', background: 'var(--parchment-border)' }} />
-            <span style={{ fontSize: '12px', color: 'var(--ink-muted)', fontStyle: 'italic', letterSpacing: '2px' }}>or</span>
-            <div style={{ flex: 1, height: '1px', background: 'var(--parchment-border)' }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
+            <div style={{ flex: 1, height: '1px', background: 'var(--border)' }} />
+            <span style={{ fontSize: '11px', color: 'var(--ink-dim)', letterSpacing: '3px' }}>OR</span>
+            <div style={{ flex: 1, height: '1px', background: 'var(--border)' }} />
           </div>
 
           <form onSubmit={handleSubmit}>
             {mode === 'register' && (
               <div style={{ marginBottom: '16px' }}>
                 <label className="vt-label">Full Name · पूरा नाम</label>
-                <input
-                  className="vt-input"
-                  placeholder="Your full name"
-                  value={form.fullName}
-                  onChange={e => setForm({ ...form, fullName: e.target.value })}
-                  required
-                />
+                <input className="vt-input" placeholder="Your full name"
+                  value={form.fullName} onChange={e => setForm({ ...form, fullName: e.target.value })} required />
               </div>
             )}
-
             <div style={{ marginBottom: '16px' }}>
               <label className="vt-label">Email · ईमेल</label>
-              <input
-                className="vt-input"
-                type="email"
-                placeholder="your@email.com"
-                value={form.email}
-                onChange={e => setForm({ ...form, email: e.target.value })}
-                required
-              />
+              <input className="vt-input" type="email" placeholder="your@email.com"
+                value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} required />
             </div>
-
-            <div style={{ marginBottom: '24px' }}>
+            <div style={{ marginBottom: '28px' }}>
               <label className="vt-label">Password · पासवर्ड</label>
-              <input
-                className="vt-input"
-                type="password"
-                placeholder="••••••••"
-                value={form.password}
-                onChange={e => setForm({ ...form, password: e.target.value })}
-                required
-                minLength={6}
-              />
+              <input className="vt-input" type="password" placeholder="••••••••"
+                value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} required minLength={6} />
             </div>
 
             {error && (
-              <div style={{ marginBottom: '16px', padding: '10px', background: '#f5e8e8', border: '1px solid var(--gulaal)', color: 'var(--gulaal)', fontSize: '13px', fontStyle: 'italic' }}>
+              <div style={{ marginBottom: '16px', padding: '10px 14px', background: 'rgba(139,32,32,0.15)', border: '1px solid rgba(139,32,32,0.3)', color: '#c04040', fontSize: '13px', fontStyle: 'italic' }}>
                 {error}
               </div>
             )}
-
             {success && (
-              <div style={{ marginBottom: '16px', padding: '10px', background: '#e8f0e8', border: '1px solid var(--mehendi)', color: 'var(--mehendi)', fontSize: '13px', fontStyle: 'italic' }}>
+              <div style={{ marginBottom: '16px', padding: '10px 14px', background: 'rgba(45,106,79,0.15)', border: '1px solid rgba(45,106,79,0.3)', color: '#4aaa7a', fontSize: '13px', fontStyle: 'italic' }}>
                 {success}
               </div>
             )}
@@ -143,15 +131,13 @@ export default function Login() {
           <div style={{ textAlign: 'center', marginTop: '20px', fontSize: '13px', color: 'var(--ink-muted)' }}>
             {mode === 'login' ? (
               <>New to the house?{' '}
-                <button onClick={() => { setMode('register'); setError(null); setSuccess(null); }}
-                  style={{ background: 'none', border: 'none', color: 'var(--gold)', cursor: 'pointer', fontFamily: "'Crimson Text', serif", fontSize: '13px', textDecoration: 'underline' }}>
+                <button onClick={() => { setMode('register'); setError(null); }} style={{ background: 'none', border: 'none', color: 'var(--gold)', cursor: 'pointer', fontFamily: "'Crimson Text',serif", fontSize: '13px', textDecoration: 'underline' }}>
                   Create account
                 </button>
               </>
             ) : (
               <>Already a member?{' '}
-                <button onClick={() => { setMode('login'); setError(null); setSuccess(null); }}
-                  style={{ background: 'none', border: 'none', color: 'var(--gold)', cursor: 'pointer', fontFamily: "'Crimson Text', serif", fontSize: '13px', textDecoration: 'underline' }}>
+                <button onClick={() => { setMode('login'); setError(null); }} style={{ background: 'none', border: 'none', color: 'var(--gold)', cursor: 'pointer', fontFamily: "'Crimson Text',serif", fontSize: '13px', textDecoration: 'underline' }}>
                   Sign in
                 </button>
               </>
@@ -159,6 +145,7 @@ export default function Login() {
           </div>
         </div>
       </div>
+      <style>{`@keyframes orbFloat{0%,100%{transform:scale(1)}50%{transform:scale(1.1)}}`}</style>
     </div>
   );
 }

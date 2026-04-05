@@ -1,5 +1,4 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import ChatAgent from './components/ChatAgent';
 import Navbar from './components/Navbar';
 import Home from './pages/Home';
 import Login from './pages/Login';
@@ -12,13 +11,14 @@ import Daftar from './pages/Daftar';
 import Hukumnama from './pages/Hukumnama';
 import Bhandar from './pages/Bhandar';
 import Aadesh from './pages/Aadesh';
+import ChatAgent from './components/ChatAgent';
 import { useAuthContext } from './context/AuthContext';
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuthContext();
   if (loading) return (
-    <div style={{ textAlign: 'center', padding: '48px', fontStyle: 'italic', color: 'var(--ink-muted)' }}>
-      Consulting the records...
+    <div style={{ textAlign: 'center', padding: '80px', color: 'var(--ink-muted)', fontStyle: 'italic', letterSpacing: '3px' }}>
+      consulting the records...
     </div>
   );
   if (!user) return <Navigate to="/login" />;
@@ -35,9 +35,9 @@ function AdminRoute({ children }) {
 export default function App() {
   return (
     <BrowserRouter>
-      <div style={{ minHeight: '100vh', background: 'var(--parchment)' }}>
+      <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
         <Navbar />
-        <main style={{ paddingTop: '24px' }}>
+        <main>
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/login" element={<Login />} />
@@ -52,18 +52,26 @@ export default function App() {
           </Routes>
         </main>
         <footer style={{
-          textAlign: 'center', padding: '20px',
-          borderTop: '1px solid var(--parchment-border)', marginTop: '24px',
+          borderTop: '1px solid var(--border)',
+          padding: '48px 24px',
+          background: 'var(--bg2)',
+          marginTop: '0',
         }}>
-          <div className="ornament">❧ ✦ ❧</div>
-          <div style={{ fontSize: '11px', color: 'var(--ink-muted)', letterSpacing: '3px', marginTop: '8px', fontStyle: 'italic' }}>
-            vyapaar house · powered by rabbitmq · supabase · spring boot · render
-          </div>
-          <div style={{ fontFamily: "'Tiro Devanagari Hindi', serif", fontSize: '12px', color: 'var(--gold)', marginTop: '4px' }}>
-            व्यापार भवन · since MMXXVI
+          <div style={{ maxWidth: '900px', margin: '0 auto', textAlign: 'center' }}>
+            <div style={{ fontFamily: "'Yatra One',serif", color: 'var(--gold)', fontSize: '24px', letterSpacing: '4px', marginBottom: '8px' }}>
+              VYAPAAR HOUSE
+            </div>
+            <div className="devanagari" style={{ fontSize: '14px', color: 'var(--ink-muted)', marginBottom: '24px' }}>
+              व्यापार भवन · since MMXXVI
+            </div>
+            <div style={{ height: '1px', background: 'linear-gradient(to right, transparent, var(--gold), transparent)', opacity: 0.3, marginBottom: '24px' }} />
+            <div style={{ fontSize: '11px', color: 'var(--ink-dim)', letterSpacing: '3px', fontStyle: 'italic', lineHeight: 2 }}>
+              powered by spring boot · rabbitmq · supabase · react · razorpay · gemini
+            </div>
+            <div className="ornament" style={{ marginTop: '16px', opacity: 0.5 }}>❧ ✦ ❧</div>
           </div>
         </footer>
-      <ChatAgent />
+        <ChatAgent />
       </div>
     </BrowserRouter>
   );
