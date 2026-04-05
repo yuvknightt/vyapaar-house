@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { useAuthContext } from '../context/AuthContext';
 import { executeToolCall } from '../utils/agentTools';
@@ -25,8 +26,7 @@ function ProductCard({ product, onAdd }) {
         <button onClick={handleAdd} style={{
           background: added ? '#2d6a4f' : '#1a1a3e', color:'#d4a017',
           border:'1px solid #d4a017', padding:'2px 8px', fontSize:'10px',
-          cursor:'pointer', fontFamily:"'Yatra One',serif", marginTop:'4px',
-          display:'block', transition:'all 0.2s',
+          cursor:'pointer', fontFamily:"'Yatra One',serif", marginTop:'4px', display:'block',
         }}>{added ? '✓ Added' : '+ Add to Cart'}</button>
       </div>
     </div>
@@ -37,9 +37,7 @@ function Bubble({ msg, onAdd }) {
   const isUser = msg.role === 'user';
   return (
     <div style={{ display:'flex', flexDirection:'column', alignItems: isUser ? 'flex-end' : 'flex-start', maxWidth:'88%', alignSelf: isUser ? 'flex-end' : 'flex-start' }}>
-      {!isUser && (
-        <div style={{ fontSize:'10px', color:'#7a6a4a', marginBottom:'3px', letterSpacing:'1px' }}>✦ Vyapaar AI</div>
-      )}
+      {!isUser && <div style={{ fontSize:'10px', color:'#7a6a4a', marginBottom:'3px', letterSpacing:'1px' }}>✦ Vyapaar AI</div>}
       {msg.toolLabel && (
         <div style={{ background:'#f5ead0', border:'1px dashed #d4b896', padding:'3px 8px', fontSize:'10px', color:'#7a6a4a', fontStyle:'italic', marginBottom:'3px' }}>
           ⚙ {msg.toolLabel}
@@ -47,8 +45,7 @@ function Bubble({ msg, onAdd }) {
       )}
       {msg.text && (
         <div style={{
-          padding:'10px 13px', fontSize:'13px', lineHeight:'1.6',
-          border:'1px solid #d4b896',
+          padding:'10px 13px', fontSize:'13px', lineHeight:'1.6', border:'1px solid #d4b896',
           background: isUser ? '#1a1a3e' : '#fffdf7',
           color: isUser ? '#d4a017' : '#1a1208',
         }}>
@@ -75,12 +72,12 @@ export default function ChatAgent() {
 
   useEffect(() => {
     if (open && messages.length === 0) {
-      setMessages([{
-        role: 'agent',
-        text: 'Namaste! 🙏 Main hoon Vyapaar — aapka personal shopping assistant.\n\nMain kar sakta hoon:\n• Products search karna\n• Cart manage karna\n• Order place karna\n• Past orders dikhana\n\nKya chahiye aapko?',
-      }]);
+      const greeting = user
+        ? `Namaste ${user.email.split('@')[0]}! 🙏 Main hoon Vyapaar — aapka personal shopping assistant.\n\nMain kar sakta hoon:\n• Products search karna\n• Cart manage karna\n• Order place karna\n• Past orders dikhana\n\nKya chahiye aapko?`
+        : `Namaste! 🙏 Main hoon Vyapaar — aapka shopping assistant.\n\nMain aapke liye products search kar sakta hoon aur suggest kar sakta hoon.\n\nCart, orders aur checkout ke liye please login karein.\n\nKya dhundh rahe hain?`;
+      setMessages([{ role:'agent', text: greeting }]);
     }
-  }, [open]);
+  }, [open, user]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior:'smooth' });
@@ -94,7 +91,7 @@ export default function ChatAgent() {
 
   const parseResponse = (data) => {
     const candidate = data.candidates?.[0];
-    if (!candidate) throw new Error('No response');
+    if (!candidate) throw new Error('No response from Gemini');
     const parts = candidate.content?.parts || [];
     return {
       text: parts.filter(p => p.text).map(p => p.text).join('\n'),
@@ -105,12 +102,12 @@ export default function ChatAgent() {
 
   const callAPI = async (msgs) => {
     const res = await fetch('/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type':'application/json' },
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
       body: JSON.stringify({ messages: msgs }),
     });
-    if (!res.ok) throw new Error(`API error: ${res.status}`);
     const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `API error ${res.status}`);
     if (data.error) throw new Error(data.error);
     return data;
   };
@@ -137,13 +134,13 @@ export default function ChatAgent() {
         if (!toolCalls.length) {
           setHistory(prev => [...prev, { role:'model', parts:[{ text: respText }] }]);
           setMessages(prev => [...prev, { role:'agent', text: respText || 'Kuch samajh nahi aaya, dobara poochein.', products: foundProducts }]);
+          foundProducts = null;
           break;
         }
 
         const toolResults = [];
         for (const tc of toolCalls) {
-          const label = tc.name.replace(/_/g,' ');
-          setMessages(prev => [...prev, { role:'agent', text:`⚙ ${label}...`, isStatus:true }]);
+          setMessages(prev => [...prev, { role:'agent', text:`⚙ ${tc.name.replace(/_/g,' ')}...`, isStatus:true }]);
           const result = await executeToolCall(tc.name, tc.args, cartItems, cartActions, user);
           setMessages(prev => prev.filter(m => !m.isStatus));
           if (tc.name === 'search_products' && result.products?.length) foundProducts = result.products;
@@ -156,18 +153,24 @@ export default function ChatAgent() {
 
         if (done) {
           setMessages(prev => [...prev, { role:'agent', text: respText || '', products: foundProducts }]);
+          foundProducts = null;
           break;
         }
       }
     } catch (e) {
-      setMessages(prev => [...prev, { role:'agent', text:`Error: ${e.message}. Please try again.` }]);
+      setMessages(prev => [...prev, { role:'agent', text:`Error: ${e.message}` }]);
     }
 
     setLoading(false);
     setTimeout(() => inputRef.current?.focus(), 100);
   };
 
-  const suggestions = ['Silk saree dikhao', 'Budget ₹2000', 'Shaadi ke liye', 'My cart dikhao', 'Mere orders'];
+  const suggestions = user
+    ? ['Silk saree dikhao', 'Budget ₹2000', 'Shaadi ke liye', 'Cart dikhao', 'Mere orders']
+    : ['Silk saree dikhao', 'Budget ₹2000', 'Shaadi ke liye', 'Bridal jewellery', 'Office wear'];
+
+  const cartCount = cartItems.reduce((s,i) => s+i.qty, 0);
+  const cartTotal = cartItems.reduce((s,i) => s+i.price*i.qty, 0);
 
   return (
     <>
@@ -203,26 +206,39 @@ export default function ChatAgent() {
                 <div style={{ fontSize:'10px', color:'#8a7a9a', letterSpacing:'1px' }}>व्यापार सहायक · shopping assistant</div>
               </div>
               <div style={{ textAlign:'right' }}>
-                <div style={{ display:'flex', alignItems:'center', gap:'5px' }}>
+                <div style={{ display:'flex', alignItems:'center', gap:'5px', justifyContent:'flex-end' }}>
                   <div style={{ width:'6px', height:'6px', borderRadius:'50%', background:'#4a7a4a' }}/>
-                  <span style={{ fontSize:'10px', color:'#8a7a9a' }}>Online</span>
+                  <span style={{ fontSize:'10px', color:'#8a7a9a' }}>{user ? user.email.split('@')[0] : 'Guest'}</span>
                 </div>
-                {cartItems.length > 0 && (
+                {cartCount > 0 && (
                   <div style={{ fontSize:'10px', color:'#d4a017', marginTop:'2px', fontFamily:"'Yatra One',serif" }}>
-                    Cart: {cartItems.reduce((s,i)=>s+i.qty,0)} · ₹{cartItems.reduce((s,i)=>s+i.price*i.qty,0).toLocaleString('en-IN')}
+                    Cart: {cartCount} · ₹{cartTotal.toLocaleString('en-IN')}
                   </div>
                 )}
               </div>
             </div>
           </div>
 
+          {!user && (
+            <div style={{ background:'#f5ead0', borderBottom:'1px solid #d4b896', padding:'6px 14px', display:'flex', justifyContent:'space-between', alignItems:'center', flexShrink:0 }}>
+              <span style={{ fontSize:'11px', color:'#7a6a4a', fontStyle:'italic' }}>Login for cart, orders & checkout</span>
+              <Link to="/login" onClick={() => setOpen(false)} style={{ color:'#d4a017', fontFamily:"'Yatra One',serif", fontSize:'11px', textDecoration:'none' }}>
+                Login →
+              </Link>
+            </div>
+          )}
+
           <div style={{ flex:1, overflowY:'auto', padding:'12px', display:'flex', flexDirection:'column', gap:'10px' }}>
             {messages.map((msg, i) => (
-              <Bubble key={i} msg={msg} onAdd={(p) => { addItem(p,1); setMessages(prev => [...prev, { role:'agent', text:`✓ ${p.name} cart mein add ho gaya! ₹${p.price.toLocaleString('en-IN')}` }]); }} />
+              <Bubble key={i} msg={msg} onAdd={(p) => {
+                if (!user) { setMessages(prev => [...prev, { role:'agent', text:'Cart mein add karne ke liye please login karein! /login par jayein.' }]); return; }
+                addItem(p, 1);
+                setMessages(prev => [...prev, { role:'agent', text:`✓ ${p.name} cart mein add ho gaya! ₹${p.price.toLocaleString('en-IN')}` }]);
+              }} />
             ))}
 
             {messages.length === 1 && (
-              <div style={{ display:'flex', flexWrap:'wrap', gap:'5px', marginTop:'4px' }}>
+              <div style={{ display:'flex', flexWrap:'wrap', gap:'5px' }}>
                 {suggestions.map(s => (
                   <button key={s} onClick={() => send(s)} style={{
                     background:'transparent', border:'1px solid #d4b896',
@@ -261,13 +277,11 @@ export default function ChatAgent() {
             <button onClick={() => send()} disabled={loading} style={{
               background:'#1a1a3e', color:'#d4a017', border:'1px solid #d4a017',
               padding:'8px 14px', fontFamily:"'Yatra One',serif", fontSize:'13px',
-              cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.5 : 1,
-              flexShrink:0,
+              cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.5 : 1, flexShrink:0,
             }}>✦</button>
           </div>
         </div>
       )}
-
       <style>{`
         @keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
         @keyframes slideUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
