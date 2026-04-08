@@ -1,5 +1,95 @@
 export const config = { runtime: 'edge' };
 
+export default async function handler(req) {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, {
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'POST',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      }
+    });
+  }
+
+  if (req.method !== 'POST') {
+    return new Response('Method not allowed', { status: 405 });
+  }
+
+  const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
+  const KV_URL        = process.env.KV_REST_API_URL;
+  const KV_TOKEN      = process.env.KV_REST_API_TOKEN;
+
+  if (!ANTHROPIC_KEY) {
+    return new Response(
+      JSON.stringify({ error: 'ANTHROPIC_API_KEY not configured' }),
+      { status: 500, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } }
+    );
+  }
+
+  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+
+  if (KV_URL && KV_TOKEN) {
+    const rl = await checkTokenBucket(ip, KV_URL, KV_TOKEN);
+    if (!rl.allowed) {
+      return new Response(
+        JSON.stringify({
+          error: 'RATE_LIMIT_EXCEEDED',
+          message: `Bahut zyada requests! Please wait ${rl.retryAfter} seconds.`,
+          hindi: 'बहुत अधिक अनुरोध। कृपया प्रतीक्षा करें।',
+          retryAfter: rl.retryAfter,
+        }),
+        {
+          status: 429,
+          headers: {
+            'Content-Type': 'application/json',
+            'Retry-After': String(rl.retryAfter),
+            'Access-Control-Allow-Origin': '*',
+          }
+        }
+      );
+    }
+  }
+
+  try {
+    const { messages } = await req.json();
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': ANTHROPIC_KEY,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 1024,
+        system: SYSTEM_PROMPT,
+        tools: TOOLS,
+        messages,
+      })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return new Response(
+        JSON.stringify({ error: data.error?.message || 'Claude API error' }),
+        { status: response.status, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } }
+      );
+    }
+
+    return new Response(JSON.stringify(data), {
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+    });
+
+  } catch (err) {
+    return new Response(
+      JSON.stringify({ error: err.message }),
+      { status: 500, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } }
+    );
+  }
+}
+
 const SYSTEM_PROMPT = `You are Vyapaar, a warm AI shopping assistant for Vyapaar House — a premium Indian textile marketplace selling sarees, suits, sandals, purses and jewellery.
 
 PERSONALITY:
@@ -105,23 +195,20 @@ async function getKV(kvUrl, kvToken, key) {
     });
     if (!res.ok) return null;
     const data = await res.json();
-    return data.result ? JSON.parse(data.result) : null;
+    if (!data.result) return null;
+    return typeof data.result === 'string' ? JSON.parse(data.result) : data.result;
   } catch { return null; }
 }
 
 async function setKV(kvUrl, kvToken, key, value, exSeconds) {
   try {
-    await fetch(`${kvUrl}/set/${encodeURIComponent(key)}`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${kvToken}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(JSON.stringify(value))
+    const url = exSeconds
+      ? `${kvUrl}/set/${encodeURIComponent(key)}/${encodeURIComponent(JSON.stringify(value))}?ex=${exSeconds}`
+      : `${kvUrl}/set/${encodeURIComponent(key)}/${encodeURIComponent(JSON.stringify(value))}`;
+    await fetch(url, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${kvToken}` }
     });
-    if (exSeconds) {
-      await fetch(`${kvUrl}/expire/${encodeURIComponent(key)}/${exSeconds}`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${kvToken}` }
-      });
-    }
   } catch {}
 }
 
@@ -157,97 +244,4 @@ async function checkTokenBucket(ip, kvUrl, kvToken) {
   bucket.tokens -= 1;
   await setKV(kvUrl, kvToken, key, bucket, 300);
   return { allowed: true, remaining: bucket.tokens, retryAfter: 0 };
-}
-
-export default async function handler(req) {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, {
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'POST',
-        'Access-Control-Allow-Headers': 'Content-Type',
-      }
-    });
-  }
-
-  if (req.method !== 'POST') {
-    return new Response('Method not allowed', { status: 405 });
-  }
-
-  const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
-  const KV_URL        = process.env.KV_REST_API_URL;
-  const KV_TOKEN      = process.env.KV_REST_API_TOKEN;
-
-  if (!ANTHROPIC_KEY) {
-    return new Response(
-      JSON.stringify({ error: 'ANTHROPIC_API_KEY not configured' }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
-    );
-  }
-
-  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
-    || req.headers.get('x-real-ip')
-    || 'unknown';
-
-  if (KV_URL && KV_TOKEN) {
-    const { allowed, retryAfter } = await checkTokenBucket(ip, KV_URL, KV_TOKEN);
-    if (!allowed) {
-      return new Response(
-        JSON.stringify({
-          error:      'RATE_LIMIT_EXCEEDED',
-          message:    `Bahut zyada requests! Please wait ${retryAfter} seconds.`,
-          hindi:      'बहुत अधिक अनुरोध। कृपया प्रतीक्षा करें।',
-          retryAfter,
-        }),
-        {
-          status: 429,
-          headers: {
-            'Content-Type':                'application/json',
-            'Retry-After':                 String(retryAfter),
-            'X-RateLimit-Remaining':       '0',
-            'Access-Control-Allow-Origin': '*',
-          }
-        }
-      );
-    }
-  }
-
-  try {
-    const { messages } = await req.json();
-
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method:  'POST',
-      headers: {
-        'Content-Type':      'application/json',
-        'x-api-key':         ANTHROPIC_KEY,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model:      'claude-haiku-4-5-20251001',
-        max_tokens: 1024,
-        system:     SYSTEM_PROMPT,
-        tools:      TOOLS,
-        messages,
-      })
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      return new Response(
-        JSON.stringify({ error: data.error?.message || 'Claude API error' }),
-        { status: response.status, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } }
-      );
-    }
-
-    return new Response(JSON.stringify(data), {
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
-    });
-
-  } catch (err) {
-    return new Response(
-      JSON.stringify({ error: err.message }),
-      { status: 500, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } }
-    );
-  }
 }
