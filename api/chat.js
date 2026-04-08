@@ -1,6 +1,6 @@
 export const config = { runtime: 'edge' };
 
-const SYSTEM_PROMPT = `You are Vyapaar, a warm AI shopping assistant for Vyapaar House — a premium Indian textile marketplace.
+const SYSTEM_PROMPT = `You are Vyapaar, a warm AI shopping assistant for Vyapaar House — a premium Indian textile marketplace selling sarees, suits, sandals, purses and jewellery.
 
 PERSONALITY:
 - Warm and knowledgeable about Indian textiles
@@ -8,29 +8,156 @@ PERSONALITY:
 - Understand Indian occasions: weddings (shaadi), Diwali, Navratri, office wear
 - Know fabrics: silk, cotton, georgette, chikankari, zardozi, kundan
 
-TOOLS:
-1. search_products - search catalogue by query/category/price (works without login)
-2. get_product_details - get full product info (works without login)
-3. add_to_cart - add to cart (requires login)
-4. remove_from_cart - remove from cart (requires login)
-5. get_cart - view cart (requires login)
-6. get_my_orders - past orders (requires login)
-7. place_order - place order with address (requires login)
+TOOLS YOU HAVE:
+1. search_products - search catalogue by query/category/price
+2. get_product_details - get full info of one product by ID
+3. add_to_cart - add product to cart
+4. remove_from_cart - remove product from cart
+5. get_cart - show current cart contents
+6. get_my_orders - show user past orders
+7. place_order - place order with delivery address
 
 RULES:
-- ALWAYS call search_products before recommending — never guess
-- For place_order: collect name, phone, street, city, state, pincode then confirm before placing
+- ALWAYS call search_products before recommending
+- For place_order: collect ALL address fields first then confirm with user
 - NEVER place order without explicit user confirmation
-- Understand Hindi/English mix: "saree dikhao", "budget 3000 hai", "cart mein daalo"
-- If tool returns LOGIN_REQUIRED error, respond warmly: "Yeh feature ke liye login zaroori hai! Please /login page par jayein."
-- Map occasions: wedding→silk sarees/kundan jewellery, Diwali→bright festive, office→cotton/chanderi
-- Be concise — max 3-4 lines per response
+- Understand mixed Hindi/English: "saree dikhao", "budget 3000 hai", "cart mein daalo"
+- If tool returns LOGIN_REQUIRED, tell user warmly to login at /login
+- Map occasions: wedding->silk sarees/kundan, Diwali->festive, office->cotton/chanderi
+- Be concise — max 3-4 lines per response`;
 
-OCCASION MAPPING:
-- Wedding/shaadi → saree category, silk, kundan jewellery  
-- Festival/Diwali/Navratri → bright sarees, traditional suits
-- Office → chanderi, cotton sarees, subtle suits
-- Casual → patiala suits, cotton sarees, kolhapuri sandals`;
+const TOOLS = [
+  {
+    name: 'search_products',
+    description: 'Search products in catalogue by query, category or price range.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'search term e.g. silk saree, wedding suit' },
+        category: { type: 'string', enum: ['all','saree','suit','sandals','purse','jewellery'] },
+        max_price: { type: 'number', description: 'max price in INR' },
+        min_price: { type: 'number', description: 'min price in INR' }
+      }
+    }
+  },
+  {
+    name: 'get_product_details',
+    description: 'Get full details of a specific product by ID',
+    input_schema: {
+      type: 'object',
+      properties: { product_id: { type: 'number' } },
+      required: ['product_id']
+    }
+  },
+  {
+    name: 'add_to_cart',
+    description: 'Add a product to shopping cart',
+    input_schema: {
+      type: 'object',
+      properties: {
+        product_id: { type: 'number' },
+        quantity: { type: 'number', description: 'default 1' }
+      },
+      required: ['product_id']
+    }
+  },
+  {
+    name: 'remove_from_cart',
+    description: 'Remove a product from cart',
+    input_schema: {
+      type: 'object',
+      properties: { product_id: { type: 'number' } },
+      required: ['product_id']
+    }
+  },
+  {
+    name: 'get_cart',
+    description: 'Get current cart contents and total',
+    input_schema: { type: 'object', properties: {} }
+  },
+  {
+    name: 'get_my_orders',
+    description: 'Get user past order history',
+    input_schema: { type: 'object', properties: {} }
+  },
+  {
+    name: 'place_order',
+    description: 'Place order with delivery address. Collect all fields before calling.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        name:    { type: 'string', description: 'full name' },
+        phone:   { type: 'string', description: '10 digit phone' },
+        street:  { type: 'string', description: 'street address' },
+        city:    { type: 'string', description: 'city name' },
+        state:   { type: 'string', description: 'state name' },
+        pincode: { type: 'string', description: '6 digit pincode' }
+      },
+      required: ['name','phone','street','city','state','pincode']
+    }
+  }
+];
+
+async function getKV(kvUrl, kvToken, key) {
+  try {
+    const res = await fetch(`${kvUrl}/get/${encodeURIComponent(key)}`, {
+      headers: { Authorization: `Bearer ${kvToken}` }
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.result ? JSON.parse(data.result) : null;
+  } catch { return null; }
+}
+
+async function setKV(kvUrl, kvToken, key, value, exSeconds) {
+  try {
+    await fetch(`${kvUrl}/set/${encodeURIComponent(key)}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${kvToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(JSON.stringify(value))
+    });
+    if (exSeconds) {
+      await fetch(`${kvUrl}/expire/${encodeURIComponent(key)}/${exSeconds}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${kvToken}` }
+      });
+    }
+  } catch {}
+}
+
+async function checkTokenBucket(ip, kvUrl, kvToken) {
+  const BUCKET_CAPACITY = 10;
+  const REFILL_RATE     = 5;
+  const REFILL_EVERY_MS = 60_000;
+  const key             = `rl:chat:${ip}`;
+  const now             = Date.now();
+
+  let bucket = await getKV(kvUrl, kvToken, key);
+
+  if (!bucket) {
+    bucket = { tokens: BUCKET_CAPACITY - 1, lastRefill: now };
+    await setKV(kvUrl, kvToken, key, bucket, 300);
+    return { allowed: true, remaining: bucket.tokens, retryAfter: 0 };
+  }
+
+  const elapsed      = now - bucket.lastRefill;
+  const refillCycles = Math.floor(elapsed / REFILL_EVERY_MS);
+
+  if (refillCycles > 0) {
+    bucket.tokens     = Math.min(BUCKET_CAPACITY, bucket.tokens + refillCycles * REFILL_RATE);
+    bucket.lastRefill = bucket.lastRefill + refillCycles * REFILL_EVERY_MS;
+  }
+
+  if (bucket.tokens <= 0) {
+    const retryAfter = Math.ceil((REFILL_EVERY_MS - (now - bucket.lastRefill)) / 1000);
+    await setKV(kvUrl, kvToken, key, bucket, 300);
+    return { allowed: false, remaining: 0, retryAfter };
+  }
+
+  bucket.tokens -= 1;
+  await setKV(kvUrl, kvToken, key, bucket, 300);
+  return { allowed: true, remaining: bucket.tokens, retryAfter: 0 };
+}
 
 export default async function handler(req) {
   if (req.method === 'OPTIONS') {
@@ -47,123 +174,70 @@ export default async function handler(req) {
     return new Response('Method not allowed', { status: 405 });
   }
 
-  const GEMINI_KEY = process.env.GEMINI_API_KEY;
-  if (!GEMINI_KEY) {
-    return new Response(JSON.stringify({ error: 'GEMINI_API_KEY not set in environment variables' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' }
-    });
+  const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
+  const KV_URL        = process.env.KV_REST_API_URL;
+  const KV_TOKEN      = process.env.KV_REST_API_TOKEN;
+
+  if (!ANTHROPIC_KEY) {
+    return new Response(
+      JSON.stringify({ error: 'ANTHROPIC_API_KEY not configured' }),
+      { status: 500, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
+
+  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+    || req.headers.get('x-real-ip')
+    || 'unknown';
+
+  if (KV_URL && KV_TOKEN) {
+    const { allowed, retryAfter } = await checkTokenBucket(ip, KV_URL, KV_TOKEN);
+    if (!allowed) {
+      return new Response(
+        JSON.stringify({
+          error:      'RATE_LIMIT_EXCEEDED',
+          message:    `Bahut zyada requests! Please wait ${retryAfter} seconds.`,
+          hindi:      'बहुत अधिक अनुरोध। कृपया प्रतीक्षा करें।',
+          retryAfter,
+        }),
+        {
+          status: 429,
+          headers: {
+            'Content-Type':                'application/json',
+            'Retry-After':                 String(retryAfter),
+            'X-RateLimit-Remaining':       '0',
+            'Access-Control-Allow-Origin': '*',
+          }
+        }
+      );
+    }
   }
 
   try {
-    const body = await req.json();
-    const { messages } = body;
+    const { messages } = await req.json();
 
-    const tools = [{
-      function_declarations: [
-        {
-          name: 'search_products',
-          description: 'Search products in catalogue by query, category or price range. Use for any product search.',
-          parameters: {
-            type: 'object',
-            properties: {
-              query: { type: 'string', description: 'search term e.g. silk saree, wedding suit, kolhapuri' },
-              category: { type: 'string', enum: ['all','saree','suit','sandals','purse','jewellery'] },
-              max_price: { type: 'number', description: 'maximum price in INR' },
-              min_price: { type: 'number', description: 'minimum price in INR' }
-            }
-          }
-        },
-        {
-          name: 'get_product_details',
-          description: 'Get full details of a specific product by ID',
-          parameters: {
-            type: 'object',
-            properties: {
-              product_id: { type: 'number', description: 'the product ID' }
-            },
-            required: ['product_id']
-          }
-        },
-        {
-          name: 'add_to_cart',
-          description: 'Add a product to shopping cart by product ID',
-          parameters: {
-            type: 'object',
-            properties: {
-              product_id: { type: 'number', description: 'product ID to add' },
-              quantity: { type: 'number', description: 'quantity to add, default 1' }
-            },
-            required: ['product_id']
-          }
-        },
-        {
-          name: 'remove_from_cart',
-          description: 'Remove a product from cart by product ID',
-          parameters: {
-            type: 'object',
-            properties: {
-              product_id: { type: 'number', description: 'product ID to remove' }
-            },
-            required: ['product_id']
-          }
-        },
-        {
-          name: 'get_cart',
-          description: 'Get current cart contents and total amount',
-          parameters: { type: 'object', properties: {} }
-        },
-        {
-          name: 'get_my_orders',
-          description: 'Get user past order history',
-          parameters: { type: 'object', properties: {} }
-        },
-        {
-          name: 'place_order',
-          description: 'Place order with delivery address. Collect all fields before calling.',
-          parameters: {
-            type: 'object',
-            properties: {
-              name: { type: 'string', description: 'full name' },
-              phone: { type: 'string', description: '10 digit phone' },
-              street: { type: 'string', description: 'street address' },
-              city: { type: 'string', description: 'city name' },
-              state: { type: 'string', description: 'state name' },
-              pincode: { type: 'string', description: '6 digit pincode' }
-            },
-            required: ['name','phone','street','city','state','pincode']
-          }
-        }
-      ]
-    }];
-
-    const geminiMessages = messages.map(m => ({
-      role: m.role === 'assistant' ? 'model' : 'user',
-      parts: Array.isArray(m.parts) ? m.parts : [{ text: m.content || '' }]
-    }));
-
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.0-pro:generateContent?key=${GEMINI_KEY}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
-          contents: geminiMessages,
-          tools,
-          tool_config: { function_calling_config: { mode: 'AUTO' } },
-          generation_config: { max_output_tokens: 1024, temperature: 0.7 }
-        })
-      }
-    );
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method:  'POST',
+      headers: {
+        'Content-Type':      'application/json',
+        'x-api-key':         ANTHROPIC_KEY,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model:      'claude-haiku-4-5-20251001',
+        max_tokens: 1024,
+        system:     SYSTEM_PROMPT,
+        tools:      TOOLS,
+        messages,
+      })
+    });
 
     const data = await response.json();
 
     if (!response.ok) {
-      return new Response(JSON.stringify({ error: data.error?.message || 'Gemini API error' }), {
-        status: response.status,
-        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
-      });
+      return new Response(
+        JSON.stringify({ error: data.error?.message || 'Claude API error' }),
+        { status: response.status, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } }
+      );
     }
 
     return new Response(JSON.stringify(data), {
@@ -171,9 +245,9 @@ export default async function handler(req) {
     });
 
   } catch (err) {
-    return new Response(JSON.stringify({ error: err.message }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
-    });
+    return new Response(
+      JSON.stringify({ error: err.message }),
+      { status: 500, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } }
+    );
   }
 }

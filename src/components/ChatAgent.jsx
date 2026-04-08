@@ -110,24 +110,61 @@ export default function ChatAgent() {
   const cartActions = { addItem, removeItem, clearCart };
 
   const parseResponse = (data) => {
-    const candidate = data.candidates?.[0];
-    if (!candidate) throw new Error('No response from Gemini');
-    const parts = candidate.content?.parts || [];
+    if (data.error) throw new Error(data.error);
+    const content = data.content || [];
+    const text = content
+      .filter(b => b.type === 'text')
+      .map(b => b.text)
+      .join('\n');
+    const toolCalls = content
+      .filter(b => b.type === 'tool_use')
+      .map(b => ({ name: b.name, args: b.input, id: b.id }));
     return {
-      text: parts.filter(p => p.text).map(p => p.text).join('\n'),
-      toolCalls: parts.filter(p => p.functionCall).map(p => p.functionCall),
-      done: candidate.finishReason === 'STOP' || candidate.finishReason === 'MAX_TOKENS',
+      text,
+      toolCalls,
+      done: data.stop_reason === 'end_turn' || data.stop_reason === 'max_tokens',
     };
   };
 
   const callAPI = async (msgs) => {
+    const claudeMessages = msgs.map(m => {
+      if (Array.isArray(m.parts)) {
+        const toolResults = m.parts.filter(p => p.functionResponse);
+        if (toolResults.length > 0) {
+          return {
+            role: 'user',
+            content: toolResults.map(p => ({
+              type: 'tool_result',
+              tool_use_id: p.functionResponse.tool_use_id || p.functionResponse.name,
+              content: JSON.stringify(p.functionResponse.response),
+            }))
+          };
+        }
+        const toolCalls = m.parts.filter(p => p.functionCall);
+        if (toolCalls.length > 0) {
+          return {
+            role: 'assistant',
+            content: toolCalls.map(p => ({
+              type: 'tool_use',
+              id: p.functionCall.id || p.functionCall.name,
+              name: p.functionCall.name,
+              input: p.functionCall.args || {},
+            }))
+          };
+        }
+        const text = m.parts.filter(p => p.text).map(p => p.text).join('\n');
+        return { role: m.role === 'model' ? 'assistant' : 'user', content: text };
+      }
+      return { role: m.role === 'model' ? 'assistant' : 'user', content: m.content || '' };
+    }).filter(m => m.content && (typeof m.content === 'string' ? m.content.trim() : m.content.length > 0));
+  
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages: msgs }),
+      body: JSON.stringify({ messages: claudeMessages }),
     });
     const data = await res.json();
-
+  
     if (res.status === 429) {
       const seconds = data.retryAfter || 60;
       setRateLimited(true);
@@ -135,17 +172,13 @@ export default function ChatAgent() {
       if (countdownRef.current) clearInterval(countdownRef.current);
       countdownRef.current = setInterval(() => {
         setRetryAfter(prev => {
-          if (prev <= 1) {
-            clearInterval(countdownRef.current);
-            setRateLimited(false);
-            return 0;
-          }
+          if (prev <= 1) { clearInterval(countdownRef.current); setRateLimited(false); return 0; }
           return prev - 1;
         });
       }, 1000);
       throw new Error(data.message || 'Rate limit exceeded');
     }
-
+  
     if (!res.ok) throw new Error(data.error || `API error ${res.status}`);
     if (data.error) throw new Error(data.error);
     return data;
@@ -188,12 +221,23 @@ export default function ChatAgent() {
           setMessages(prev => prev.filter(m => !m.isStatus));
           if (tc.name === 'search_products' && result.products?.length) foundProducts = result.products;
           toolResults.push({
-            role:'user',
-            parts:[{ functionResponse:{ name:tc.name, response:result } }]
+            role: 'user',
+            parts: [{
+              functionResponse: {
+                name: tc.name,
+                tool_use_id: tc.id,
+                response: result
+              }
+            }]
           });
         }
 
-        const modelMsg = { role:'model', parts: toolCalls.map(tc => ({ functionCall:tc })) };
+        const modelMsg = {
+          role: 'model',
+          parts: toolCalls.map(tc => ({
+            functionCall: { name: tc.name, args: tc.args, id: tc.id }
+          }))
+        };
         currentHistory = [...currentHistory, modelMsg, ...toolResults];
         setHistory(currentHistory);
 
