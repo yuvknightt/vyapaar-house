@@ -40,7 +40,7 @@ function ProductCard({ product, onAdd }) {
   );
 }
 
-function Bubble({ msg, onAdd }) {
+function Bubble({ msg, onAdd, onCheckout }) {
   const isUser = msg.role === 'user';
   return (
     <div style={{ display:'flex', flexDirection:'column', alignItems: isUser ? 'flex-end' : 'flex-start', maxWidth:'88%', alignSelf: isUser ? 'flex-end' : 'flex-start' }}>
@@ -69,26 +69,20 @@ function Bubble({ msg, onAdd }) {
       )}
       {msg.products?.map(p => <ProductCard key={p.id} product={p} onAdd={onAdd} />)}
       {msg.isCheckoutLink && (
-      <Link to="/checkout" onClick={() => setOpen(false)} style={{ textDecoration:'none', display:'block', marginTop:'6px' }}>
-        <div style={{
-          padding:'10px 16px',
+        <div onClick={onCheckout} style={{
+          marginTop:'6px', padding:'10px 16px',
           background:'rgba(212,160,23,0.15)',
           border:'1px solid var(--gold)',
-          color:'var(--gold)',
-          fontFamily:"'Cinzel',serif",
-          fontSize:'11px',
-          letterSpacing:'2px',
-          cursor:'pointer',
-          textAlign:'center',
-          transition:'all 0.3s',
+          color:'var(--gold)', fontFamily:"'Cinzel',serif",
+          fontSize:'11px', letterSpacing:'2px',
+          cursor:'pointer', textAlign:'center',
         }}
           onMouseEnter={e => e.currentTarget.style.background='rgba(212,160,23,0.3)'}
           onMouseLeave={e => e.currentTarget.style.background='rgba(212,160,23,0.15)'}
         >
           PROCEED TO CHECKOUT →
         </div>
-      </Link>
-)}
+      )}
     </div>
   );
 }
@@ -375,15 +369,21 @@ export default function ChatAgent() {
           )}
 
           <div style={{ flex:1, overflowY:'auto', padding:'12px', display:'flex', flexDirection:'column', gap:'10px' }}>
-            {messages.map((msg, i) => (
-              <Bubble key={i} msg={msg} onAdd={(p) => {
-                if (!user) {
-                  setMessages(prev => [...prev, { role:'agent', text:'Cart ke liye please login karein! /login par jayein.' }]);
-                  return;
-                }
-                addItem(p, 1);
-                setMessages(prev => [...prev, { role:'agent', text:`✓ ${p.name} cart mein add ho gaya! ₹${p.price.toLocaleString('en-IN')}` }]);
-              }} />
+          {messages.map((msg, i) => (
+          <Bubble key={i} msg={msg}
+            onAdd={(p) => {
+              if (!user) {
+                setMessages(prev => [...prev, { role:'agent', text:'Cart ke liye please login karein! /login par jayein.' }]);
+                return;
+              }
+              addItem(p, 1);
+              setMessages(prev => [...prev, { role:'agent', text:`✓ ${p.name} cart mein add ho gaya! ₹${p.price.toLocaleString('en-IN')}` }]);
+            }}
+            onCheckout={() => {
+              setOpen(false);
+              window.location.href = '/checkout';
+            }}
+          />
             ))}
 
             {messages.length === 1 && (
