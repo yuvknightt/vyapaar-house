@@ -81,16 +81,51 @@ export async function executeToolCall(toolName, toolInput, cartItems, cartAction
 
     case 'place_order': {
       if (!cartItems.length) return { error: 'Cart is empty. Add items first.' };
-      try {
-        const order = await placeFullOrder({
-          user, items: cartItems,
-          address: { name: toolInput.name, phone: toolInput.phone, street: toolInput.street, city: toolInput.city, state: toolInput.state, pincode: toolInput.pincode },
-          paymentId: `AI_ORDER_${Date.now()}`,
-          total: cartItems.reduce((s,i) => s + i.price * i.qty, 0),
-        });
-        cartActions.clearCart();
-        return { success: true, order_id: order.id.slice(0,8).toUpperCase(), total: order.total_amount, message: 'Order placed! Confirmation email sent.' };
-      } catch (e) { return { error: e.message }; }
+      if (!user) return { error: 'LOGIN_REQUIRED', message: 'Please login first' };
+    
+      const address = {
+        name: toolInput.name,
+        phone: toolInput.phone,
+        street: toolInput.street,
+        city: toolInput.city,
+        state: toolInput.state,
+        pincode: toolInput.pincode,
+      };
+    
+      const paymentMethod = toolInput.payment_method || 'ONLINE';
+    
+      if (paymentMethod === 'COD') {
+        try {
+          const order = await placeFullOrder({
+            user,
+            items: cartItems,
+            address,
+            paymentId: `COD_${Date.now()}`,
+            total: cartItems.reduce((s,i) => s + i.price * i.qty, 0),
+          });
+          cartActions.clearCart();
+          return {
+            success: true,
+            order_id: order.id.slice(0,8).toUpperCase(),
+            total: order.total_amount,
+            payment_method: 'Cash on Delivery',
+            message: 'Order placed successfully with Cash on Delivery!',
+          };
+        } catch(e) {
+          return { error: e.message };
+        }
+      }
+    
+      // For online payment — store address and redirect to checkout
+      sessionStorage.setItem('agent_checkout_address', JSON.stringify(address));
+      return {
+        success: false,
+        requires_payment: true,
+        message: 'Please complete payment on the checkout page',
+        redirect: '/checkout',
+        address,
+        total: cartItems.reduce((s,i) => s + i.price * i.qty, 0),
+      };
     }
 
     default: return { error: 'Unknown tool' };

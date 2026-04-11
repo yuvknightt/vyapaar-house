@@ -22,7 +22,7 @@ function useScrollReveal(deps = []) {
   }, deps);
 }
 
-function Hero() {
+function Hero({ user }) {
   const orb1Ref = useRef(null);
   const orb2Ref = useRef(null);
   const orb3Ref = useRef(null);
@@ -68,13 +68,15 @@ function Hero() {
             onClick={() => document.getElementById('bazaar')?.scrollIntoView({ behavior:'smooth' })}>
             ENTER THE BAZAAR
           </button>
-          <Link to="/login" style={{ textDecoration:'none' }}>
-            <button style={{ background:'transparent', border:'1px solid var(--border-md)', color:'var(--ink-muted)', padding:'12px 32px', fontFamily:"'Cinzel',serif", fontSize:'11px', letterSpacing:'2px', cursor:'pointer', transition:'all 0.3s' }}
-              onMouseEnter={e=>{e.target.style.borderColor='var(--gold)';e.target.style.color='var(--gold)'}}
-              onMouseLeave={e=>{e.target.style.borderColor='var(--border-md)';e.target.style.color='var(--ink-muted)'}}>
-              SIGN IN
-            </button>
-          </Link>
+          {!user && (
+            <Link to="/login" style={{ textDecoration: 'none' }}>
+              <button style={{ background:'transparent', border:'1px solid var(--border-md)', color:'var(--ink-muted)', padding:'12px 32px', fontFamily:"'Cinzel',serif", fontSize:'11px', letterSpacing:'2px', cursor:'pointer', transition:'all 0.3s' }}
+                onMouseEnter={e=>{e.target.style.borderColor='var(--gold)';e.target.style.color='var(--gold)'}}
+                onMouseLeave={e=>{e.target.style.borderColor='var(--border-md)';e.target.style.color='var(--ink-muted)'}}>
+                SIGN IN
+              </button>
+            </Link>
+          )}
         </div>
       </div>
 
@@ -216,7 +218,7 @@ export default function Home() {
   const [search, setSearch] = useState('');
   const [priceRange, setPriceRange] = useState(10000);
   const [resultCount, setResultCount] = useState(0);
-
+  const { user } = useAuthContext();
   useScrollReveal([products, loading]);
 
   const fetchProducts = useCallback(async () => {
@@ -238,7 +240,7 @@ export default function Home() {
 
   return (
     <div>
-      <Hero />
+      <Hero user={user} />
       <Marquee />
 
       <div id="bazaar" style={{ maxWidth:'1280px', margin:'0 auto', padding:'80px 24px' }}>

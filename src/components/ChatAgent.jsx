@@ -68,6 +68,27 @@ function Bubble({ msg, onAdd }) {
         </div>
       )}
       {msg.products?.map(p => <ProductCard key={p.id} product={p} onAdd={onAdd} />)}
+      {msg.isCheckoutLink && (
+      <Link to="/checkout" onClick={() => setOpen(false)} style={{ textDecoration:'none', display:'block', marginTop:'6px' }}>
+        <div style={{
+          padding:'10px 16px',
+          background:'rgba(212,160,23,0.15)',
+          border:'1px solid var(--gold)',
+          color:'var(--gold)',
+          fontFamily:"'Cinzel',serif",
+          fontSize:'11px',
+          letterSpacing:'2px',
+          cursor:'pointer',
+          textAlign:'center',
+          transition:'all 0.3s',
+        }}
+          onMouseEnter={e => e.currentTarget.style.background='rgba(212,160,23,0.3)'}
+          onMouseLeave={e => e.currentTarget.style.background='rgba(212,160,23,0.15)'}
+        >
+          PROCEED TO CHECKOUT →
+        </div>
+      </Link>
+)}
     </div>
   );
 }
@@ -218,6 +239,16 @@ export default function ChatAgent() {
         for (const tc of toolCalls) {
           setMessages(prev => [...prev, { role:'agent', text:`⚙ ${tc.name.replace(/_/g,' ')}...`, isStatus:true }]);
           const result = await executeToolCall(tc.name, tc.args, cartItems, cartActions, user);
+          if (tc.name === 'place_order' && result.requires_payment) {
+            sessionStorage.setItem('agent_checkout_address', JSON.stringify(result.address));
+            setMessages(prev => [...prev, {
+              role: 'agent',
+              text: `✦ Almost there!\n\nTotal: ₹${result.total?.toLocaleString('en-IN')}\n\nClick below to complete payment:`,
+              isCheckoutLink: true,
+            }]);
+            setLoading(false);
+            return;
+          }
           setMessages(prev => prev.filter(m => !m.isStatus));
           if (tc.name === 'search_products' && result.products?.length) foundProducts = result.products;
           toolResults.push({

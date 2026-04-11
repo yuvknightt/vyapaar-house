@@ -172,20 +172,21 @@ const TOOLS = [
   },
   {
     name: 'place_order',
-    description: 'Place order with delivery address. Collect all fields before calling.',
+    description: 'Place order. First collect address, then ask payment preference: ONLINE (Razorpay) or COD (Cash on Delivery).',
     input_schema: {
       type: 'object',
       properties: {
-        name:    { type: 'string', description: 'full name' },
-        phone:   { type: 'string', description: '10 digit phone' },
-        street:  { type: 'string', description: 'street address' },
-        city:    { type: 'string', description: 'city name' },
-        state:   { type: 'string', description: 'state name' },
-        pincode: { type: 'string', description: '6 digit pincode' }
+        name:           { type: 'string', description: 'full name' },
+        phone:          { type: 'string', description: '10 digit phone' },
+        street:         { type: 'string', description: 'street address' },
+        city:           { type: 'string', description: 'city name' },
+        state:          { type: 'string', description: 'state name' },
+        pincode:        { type: 'string', description: '6 digit pincode' },
+        payment_method: { type: 'string', enum: ['ONLINE', 'COD'], description: 'ONLINE for Razorpay, COD for cash on delivery' }
       },
-      required: ['name','phone','street','city','state','pincode']
+      required: ['name','phone','street','city','state','pincode','payment_method']
     }
-  }
+  },
 ];
 
 async function getKV(kvUrl, kvToken, key) {
